@@ -15,12 +15,19 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
     );
     event TokenMinted(address indexed to, uint256 amount);
     event TokenBurned(address indexed from, uint256 amount);
-
-    // TOKENS_PER_USER * AMOUNT_USERS_CLAIM = 50 * 100 => total of claimed =  5000 (token)
+    // TOKENS_PER_USER * AMOUNT_USERS_CLAIM = 50 * 10000 => total of claimed =  20000 (token)
     // AIRDROP PERCENTAGE = 1 %
-    uint256 constant TOKENS_PER_USER = 100;
+    uint256 constant TOKENS_PER_USER = 20000;
     uint256 constant MAX_USERS_CLAIMED = 100;
-    uint256 constant TOTAL_SUPPLY = 1000000 * 10 ** 18;
+    // 100 millions (token) =  Max Total Supply
+    /* TGE: Only 10-20 percent = 10-20 millions (token)
+        - Vault(rewarding for ecosystem devs, staking holders): 5-10 percent = 5-10 millions (token)
+            Using proposal for distributing token for ecosystem devs
+            Sharing token for staking holders
+        - Airdrop token: 1 % = 1 million (token)
+        - Adding LP (Uniswap): 4-9 percent = 4-9 million (token)
+    */
+    uint256 constant TOTAL_SUPPLY = 100000000 * 10 ** 18;
 
     uint256 public s_claimedUser;
     mapping(address => bool) public s_claimedTokens;
@@ -76,15 +83,15 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
         emit TokenTransfered(_from, _to, _value);
     }
 
-    // The functions below are overrides from ERC20
+    // // The functions below are overrides from ERC20
 
-    function _mint(address account, uint256 value) internal override(ERC20) {
-        super._mint(account, value);
-        emit TokenMinted(account, value);
-    }
+    // function mint(address account, uint256 value) public override(ERC20) {
+    //     super._mint(account, value);
+    //     emit TokenMinted(account, value);
+    // }
 
-    function _burn(address account, uint256 value) internal override(ERC20) {
-        super._burn(account, value);
-        emit TokenBurned(account, value);
-    }
+    // function burn(address account, uint256 value) public override(ERC20) {
+    //     super._burn(account, value);
+    //     emit TokenBurned(account, value);
+    // }
 }
