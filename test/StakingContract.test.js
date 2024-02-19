@@ -8,7 +8,7 @@ const SECONDS_IN_A_DAY = 86400;
 const SECONDS_IN_A_YEAR = 31449600;
 
 describe("Staking Unit Tests", () => {
-  let staking, rewardToken, deployer, dai, eth, stakeAmount;
+  let staking, rewardToken, deployer, stakeAmount;
   beforeEach(async () => {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];

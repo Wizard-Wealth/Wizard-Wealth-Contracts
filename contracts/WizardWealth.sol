@@ -83,15 +83,15 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
         emit TokenTransfered(_from, _to, _value);
     }
 
-    // // The functions below are overrides from ERC20
+    // The functions below are overrides from ERC20
 
-    // function mint(address account, uint256 value) public override(ERC20) {
-    //     super._mint(account, value);
-    //     emit TokenMinted(account, value);
-    // }
+    function mint(address account, uint256 value) public onlyOwner {
+        super._mint(account, value);
+        emit TokenMinted(account, value);
+    }
 
-    // function burn(address account, uint256 value) public override(ERC20) {
-    //     super._burn(account, value);
-    //     emit TokenBurned(account, value);
-    // }
+    function burn(address account, uint256 value) public onlyOwner {
+        super._burn(account, value);
+        emit TokenBurned(account, value);
+    }
 }
