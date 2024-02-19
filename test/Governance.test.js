@@ -2,6 +2,8 @@ const { expect } = require("chai");
 const hre = require("hardhat");
 const ethers = require("ethers");
 const { constants } = require("@openzeppelin/test-helpers");
+const GovernorContractABI = require("../artifacts/contracts/governance/GovernorContract.sol/GovernorContract.json");
+const BoxABI = require("../artifacts/contracts/BoxTest.sol/BoxTest.json");
 
 // Governor Contract
 const QUORUM_PERCENTAGE = 4; // 4%
@@ -19,14 +21,15 @@ describe("Testing Governance Contract", () => {
     signers,
     governorContract,
     governanceTimeLockContract,
+    boxContract,
     wwTokenContract;
   beforeEach(async () => {
     [deployer, governor, ...signers] = await hre.ethers.getSigners();
     // Deploy Governance Token (WizardWealth) Contract
     console.log("Deploying WizardWealth Contract ...");
-    const initialSupply = BigInt(1000000 * 10 ** 18);
+    const keepTokenPercentage = 5;
     wwTokenContract = await hre.ethers.deployContract("WizardWealth", [
-      initialSupply,
+      keepTokenPercentage,
     ]);
     await wwTokenContract.waitForDeployment();
     console.log(`WizardWealth address: ${wwTokenContract.target}`);
@@ -36,24 +39,22 @@ describe("Testing Governance Contract", () => {
     console.log("Deploying Governance Time Lock Contract ...");
     governanceTimeLockContract = await hre.ethers.deployContract(
       "GovernanceTimelock",
-      [MIN_DELAY, [], []]
+      [MIN_DELAY, [], [], deployer]
     );
     await governanceTimeLockContract.waitForDeployment();
     console.log(
       "Governance Time Lock Contract address: " +
         governanceTimeLockContract.target
     );
-    // Deploy Governance Contract
-    console.log("Deploying Governance Contract ...");
-    governorContract = await hre.ethers.deployContract("GovernanceContract", [
+    // Deploy Governor Contract
+    console.log("Deploying Governor Contract ...");
+    governorContract = await hre.ethers.deployContract("GovernorContract", [
       wwTokenContract.target,
       governanceTimeLockContract.target,
     ]);
     await governorContract.waitForDeployment();
     console.log("Governance Contract address: " + governorContract.target);
-  });
 
-  it("Create a Proposal", async () => {
     const proposerRole = await governanceTimeLockContract.PROPOSER_ROLE();
     const executorRole = await governanceTimeLockContract.EXECUTOR_ROLE();
     const adminRole = await governanceTimeLockContract.DEFAULT_ADMIN_ROLE();
@@ -62,12 +63,41 @@ describe("Testing Governance Contract", () => {
       executorRole,
       ethers.getAddress(constants.ZERO_ADDRESS)
     );
-    const tx = await governanceTimeLockContract.revokeRole(
-      adminRole,
-      deployer.address
-    );
+
+    // Deploy Contract to be Governed -> Box Contract
+    boxContract = await hre.ethers.deployContract("BoxTest", []);
+    await boxContract.waitForDeployment();
+    console.log("BoxTest Contract address: " + boxContract.target);
+
+    // Transfer ownership of BoxTest Contract to TimeLock Contract
+    const tx = await boxContract.transferOwnership(governanceTimeLockContract);
     await tx.wait(1);
-    const signer = await hre.ethers.getSigner();
-    // const proposalId =
+  });
+
+  it("Create a Proposal", async () => {
+    const value = 10;
+    const boxInterface = new hre.ethers.Interface(BoxABI.abi);
+    const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
+    const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
+    const createProposalTx = await governorContract.propose(
+      [boxContract.target],
+      [value],
+      [encodedFunction],
+      PROPOSAL_DESCRIPTION
+    );
+    const createProposalTxReceipt = await createProposalTx.wait(1);
+
+    expect(createProposalTxReceipt.logs[0].args.targets[0]).to.equal(
+      boxContract.target
+    );
+    // expect(createProposalTxReceipt.logs[0].args.values[0]).to.equal(value);
+    expect(createProposalTxReceipt.logs[0].args.calldatas[0]).to.equal(
+      encodedFunction
+    );
+    expect(createProposalTxReceipt.logs[0].args.description).to.equal(
+      PROPOSAL_DESCRIPTION
+    );
+    const proposalId = createProposalTxReceipt.logs[0].args.proposalId;
+    await expect(await governorContract.state(proposalId)).to.not.be.reverted;
   });
 });
