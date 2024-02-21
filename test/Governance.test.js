@@ -1,7 +1,9 @@
 const { expect } = require("chai");
 const hre = require("hardhat");
 const ethers = require("ethers");
-const { constants } = require("@openzeppelin/test-helpers");
+const { constants, time } = require("@openzeppelin/test-helpers");
+const helpers = require("@nomicfoundation/hardhat-network-helpers");
+
 const GovernorContractABI = require("../artifacts/contracts/governance/GovernorContract.sol/GovernorContract.json");
 const BoxABI = require("../artifacts/contracts/BoxTest.sol/BoxTest.json");
 
@@ -14,6 +16,16 @@ const MIN_DELAY = 1; // 1 second
 // Proposal
 // const PROPOSAL_DESCRIPTION = "Proposal #1: Store 1 in the Box!";
 // const NEW_STORE_VALUE = 5;
+const proposalStates = [
+  "Pending",
+  "Active",
+  "Canceled",
+  "Defeated",
+  "Succeeded",
+  "Queued",
+  "Expired",
+  "Executed",
+];
 
 describe("Testing Governance Contract", () => {
   let deployer,
@@ -64,7 +76,7 @@ describe("Testing Governance Contract", () => {
       ethers.getAddress(constants.ZERO_ADDRESS)
     );
 
-    // Deploy Contract to be Governed -> Box Contract
+    // Deploy Contract to be Governed -> In this case, it's Box Contract
     boxContract = await hre.ethers.deployContract("BoxTest", []);
     await boxContract.waitForDeployment();
     console.log("BoxTest Contract address: " + boxContract.target);
@@ -74,7 +86,7 @@ describe("Testing Governance Contract", () => {
     await tx.wait(1);
   });
 
-  it("Create a Proposal", async () => {
+  it("Should create a Proposal Successfully", async () => {
     const value = 10;
     const boxInterface = new hre.ethers.Interface(BoxABI.abi);
     const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
@@ -87,17 +99,105 @@ describe("Testing Governance Contract", () => {
     );
     const createProposalTxReceipt = await createProposalTx.wait(1);
 
+    // TestCase: Testing the arguments when passing the propose() function is correct or not.
     expect(createProposalTxReceipt.logs[0].args.targets[0]).to.equal(
       boxContract.target
     );
-    // expect(createProposalTxReceipt.logs[0].args.values[0]).to.equal(value);
     expect(createProposalTxReceipt.logs[0].args.calldatas[0]).to.equal(
       encodedFunction
     );
     expect(createProposalTxReceipt.logs[0].args.description).to.equal(
       PROPOSAL_DESCRIPTION
     );
+
+    // TestCase: Testing the proposalId of latest created Proposal is valid or not.
     const proposalId = createProposalTxReceipt.logs[0].args.proposalId;
     await expect(await governorContract.state(proposalId)).to.not.be.reverted;
+
+    // TestCase: Testing the status of the proposal is equal "Pending" or not.
+    const proposalStatus =
+      proposalStates[await governorContract.state(proposalId)];
+    expect(proposalStatus).to.equal("Pending");
+  });
+
+  describe("Casting a vote", () => {
+    let proposalId;
+    beforeEach(async () => {
+      // Creating a new proposal
+      const value = 10;
+      const boxInterface = new hre.ethers.Interface(BoxABI.abi);
+      const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
+      const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
+      const createProposalTx = await governorContract.propose(
+        [boxContract.target],
+        [value],
+        [encodedFunction],
+        PROPOSAL_DESCRIPTION
+      );
+      const createProposalTxReceipt = await createProposalTx.wait(1);
+      proposalId = createProposalTxReceipt.logs[0].args.proposalId;
+
+      // Mine more 1 block
+      await hre.network.provider.send("evm_mine");
+    });
+    describe("Vote Successfully", () => {
+      beforeEach(async () => {
+        // Mine more 1 block
+        await hre.network.provider.send("evm_mine");
+      });
+      describe("Vote with reason", () => {
+        it("Should vote In-favor for a created proposal with reason successfully", async () => {
+          const reasonForVoting = "In-favor proposal #1";
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(
+            await governorContract.castVoteWithReason(
+              proposalId,
+              1,
+              reasonForVoting
+            )
+          ).to.not.be.reverted;
+        });
+        it("Should vote Against for a created proposal with reason successfully", async () => {
+          const reasonForVoting = "Against proposal #1";
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(
+            await governorContract.castVoteWithReason(
+              proposalId,
+              0,
+              reasonForVoting
+            )
+          ).to.not.be.reverted;
+        });
+        it("Should vote Abstain for a created proposal with reason successfully", async () => {
+          const reasonForVoting = "Abstain proposal #1";
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(
+            await governorContract.castVoteWithReason(
+              proposalId,
+              2,
+              reasonForVoting
+            )
+          ).to.not.be.reverted;
+        });
+      });
+      describe("Vote without reason", () => {
+        it("Should vote In-favor for a created proposal without reason successfully", async () => {
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(await governorContract.castVote(proposalId, 1)).to.not.be
+            .reverted;
+        });
+        it("Should vote Against for a created proposal without reason successfully", async () => {
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(await governorContract.castVote(proposalId, 0)).to.not.be
+            .reverted;
+        });
+        it("Should vote Abstain for a created proposal without reason successfully", async () => {
+          expect(await governorContract.state(proposalId)).to.equal(1n);
+          expect(await governorContract.castVote(proposalId, 2)).to.not.be
+            .reverted;
+        });
+      });
+    });
+    describe("Vote Failed", () => {});
   });
 });
