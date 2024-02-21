@@ -14,6 +14,7 @@
     "hardhat": "^2.19.5"
   },
   "dependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.10",
     "@openzeppelin/contracts": "^5.0.1",
     "@openzeppelin/test-helpers": "^0.5.16",
     "@uniswap/v2-periphery": "^1.1.0-beta.0",
