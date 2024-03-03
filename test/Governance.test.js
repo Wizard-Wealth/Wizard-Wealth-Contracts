@@ -6,6 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 
 const GovernorContractABI = require("../artifacts/contracts/governance/GovernorContract.sol/GovernorContract.json");
 const BoxABI = require("../artifacts/contracts/BoxTest.sol/BoxTest.json");
+const { moveBlocks } = require("../utils/move-blocks");
 
 // Governor Contract
 const QUORUM_PERCENTAGE = 4; // 4%
@@ -148,12 +149,12 @@ describe("Testing Governance Contract", () => {
       proposalId = createProposalTxReceipt.logs[0].args.proposalId;
 
       // Mine more 1 block
-      await hre.network.provider.send("evm_mine");
+      await moveBlocks(1);
     });
     describe("Vote Successfully", () => {
       beforeEach(async () => {
         // Mine more 1 block
-        await hre.network.provider.send("evm_mine");
+        await moveBlocks(1);
       });
       describe("Vote with reason", () => {
         it("Should vote In-favor for a created proposal with reason successfully", async () => {
@@ -233,7 +234,7 @@ describe("Testing Governance Contract", () => {
       proposalId = createProposalTxReceipt.logs[0].args.proposalId;
 
       // Mine more 1 block
-      await hre.network.provider.send("evm_mine");
+      await moveBlocks(1);
     });
     describe("Before Voting Ending", () => {
       beforeEach(async () => {
@@ -248,6 +249,17 @@ describe("Testing Governance Contract", () => {
         convertedProposalDescription = hre.ethers.keccak256(
           hre.ethers.toUtf8Bytes(proposalDescription)
         );
+      });
+      it("Should be reverted the transaction when call queue() function", async () => {
+        // Queueing the proposal
+        await expect(
+          governorContract.queue(
+            [boxContract.target],
+            [0],
+            [encodedFunction],
+            convertedProposalDescription
+          )
+        ).to.be.reverted;
       });
       it("Should be the reverted transaction when calling execute() function", async () => {
         // Executing the proposal
@@ -277,9 +289,7 @@ describe("Testing Governance Contract", () => {
       });
       it("Should be not reverted the transaction when executing the proposal with Queued State", async () => {
         // Mined more 50 blocks to finish the voting process
-        for (let i = 0; i < 50; i++) {
-          await hre.network.provider.send("evm_mine");
-        }
+        await moveBlocks(50);
         // Queueing the proposal
         let queueTx;
         await expect(

@@ -1,12 +1,9 @@
-const { network } = require("hardhat");
+const hre = require("hardhat");
 
 async function moveBlocks(amount) {
   console.log("Moving blocks...");
   for (let i = 0; i < amount; i++) {
-    await network.provider.request({
-      method: "evm_mine",
-      params: [],
-    });
+    await hre.network.provider.send("evm_mine");
   }
   console.log(`Moved ${amount} blocks`);
 }
