@@ -6,6 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 
 const GovernorContractABI = require("../artifacts/contracts/governance/GovernorContract.sol/GovernorContract.json");
 const BoxABI = require("../artifacts/contracts/BoxTest.sol/BoxTest.json");
+const { moveBlocks } = require("../utils/move-blocks");
 
 // Governor Contract
 const QUORUM_PERCENTAGE = 4; // 4%
@@ -38,7 +39,6 @@ describe("Testing Governance Contract", () => {
   beforeEach(async () => {
     [deployer, governor, ...signers] = await hre.ethers.getSigners();
     // Deploy Governance Token (WizardWealth) Contract
-    console.log("Deploying WizardWealth Contract ...");
     const keepTokenPercentage = 5;
     wwTokenContract = await hre.ethers.deployContract("WizardWealth", [
       keepTokenPercentage,
@@ -46,12 +46,11 @@ describe("Testing Governance Contract", () => {
     await wwTokenContract.waitForDeployment();
     console.log(`WizardWealth address: ${wwTokenContract.target}`);
     // Delegate Governance Token
-    await wwTokenContract.delegate(deployer);
+    await wwTokenContract.delegate(deployer.address);
     // Deploy Governance Time lock FContract
-    console.log("Deploying Governance Time Lock Contract ...");
     governanceTimeLockContract = await hre.ethers.deployContract(
       "GovernanceTimelock",
-      [MIN_DELAY, [], [], deployer]
+      [MIN_DELAY, [], [], deployer.address]
     );
     await governanceTimeLockContract.waitForDeployment();
     console.log(
@@ -59,7 +58,6 @@ describe("Testing Governance Contract", () => {
         governanceTimeLockContract.target
     );
     // Deploy Governor Contract
-    console.log("Deploying Governor Contract ...");
     governorContract = await hre.ethers.deployContract("GovernorContract", [
       wwTokenContract.target,
       governanceTimeLockContract.target,
@@ -70,11 +68,21 @@ describe("Testing Governance Contract", () => {
     const proposerRole = await governanceTimeLockContract.PROPOSER_ROLE();
     const executorRole = await governanceTimeLockContract.EXECUTOR_ROLE();
     const adminRole = await governanceTimeLockContract.DEFAULT_ADMIN_ROLE();
-    await governanceTimeLockContract.grantRole(proposerRole, governor.address);
-    await governanceTimeLockContract.grantRole(
+    const proposerTx = await governanceTimeLockContract.grantRole(
+      proposerRole,
+      governorContract.target
+    );
+    await proposerTx.wait(1);
+    const executorTx = await governanceTimeLockContract.grantRole(
       executorRole,
       ethers.getAddress(constants.ZERO_ADDRESS)
     );
+    await executorTx.wait(1);
+    const revokeTx = await governanceTimeLockContract.revokeRole(
+      adminRole,
+      deployer.address
+    );
+    await revokeTx.wait(1);
 
     // Deploy Contract to be Governed -> In this case, it's Box Contract
     boxContract = await hre.ethers.deployContract("BoxTest", []);
@@ -93,7 +101,7 @@ describe("Testing Governance Contract", () => {
     const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
     const createProposalTx = await governorContract.propose(
       [boxContract.target],
-      [value],
+      [0],
       [encodedFunction],
       PROPOSAL_DESCRIPTION
     );
@@ -126,11 +134,14 @@ describe("Testing Governance Contract", () => {
       // Creating a new proposal
       const value = 10;
       const boxInterface = new hre.ethers.Interface(BoxABI.abi);
-      const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
+      const encodedFunction = boxInterface.encodeFunctionData(
+        boxInterface.getFunction("store"),
+        [value]
+      );
       const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
       const createProposalTx = await governorContract.propose(
         [boxContract.target],
-        [value],
+        [0],
         [encodedFunction],
         PROPOSAL_DESCRIPTION
       );
@@ -138,12 +149,12 @@ describe("Testing Governance Contract", () => {
       proposalId = createProposalTxReceipt.logs[0].args.proposalId;
 
       // Mine more 1 block
-      await hre.network.provider.send("evm_mine");
+      await moveBlocks(1);
     });
     describe("Vote Successfully", () => {
       beforeEach(async () => {
         // Mine more 1 block
-        await hre.network.provider.send("evm_mine");
+        await moveBlocks(1);
       });
       describe("Vote with reason", () => {
         it("Should vote In-favor for a created proposal with reason successfully", async () => {
@@ -198,6 +209,111 @@ describe("Testing Governance Contract", () => {
         });
       });
     });
-    describe("Vote Failed", () => {});
+  });
+
+  describe("Executing Proposal", () => {
+    let value,
+      encodedFunction,
+      proposalDescription,
+      proposalId,
+      convertedProposalDescription;
+    beforeEach(async () => {
+      // Creating a new proposal
+      value = 10;
+      encodedFunction = boxContract.interface.encodeFunctionData("store", [
+        value,
+      ]);
+      proposalDescription = "Change the value of Box Contract";
+      const createProposalTx = await governorContract.propose(
+        [boxContract.target],
+        [0],
+        [encodedFunction],
+        proposalDescription
+      );
+      const createProposalTxReceipt = await createProposalTx.wait(1);
+      proposalId = createProposalTxReceipt.logs[0].args.proposalId;
+
+      // Mine more 1 block
+      await moveBlocks(1);
+    });
+    describe("Before Voting Ending", () => {
+      beforeEach(async () => {
+        // Casting a vote
+        const reasonForVoting = "In-favor proposal #1";
+        await governorContract.castVoteWithReason(
+          proposalId,
+          1,
+          reasonForVoting
+        );
+        // Converting String => Bytes32
+        convertedProposalDescription = hre.ethers.keccak256(
+          hre.ethers.toUtf8Bytes(proposalDescription)
+        );
+      });
+      it("Should be reverted the transaction when call queue() function", async () => {
+        // Queueing the proposal
+        await expect(
+          governorContract.queue(
+            [boxContract.target],
+            [0],
+            [encodedFunction],
+            convertedProposalDescription
+          )
+        ).to.be.reverted;
+      });
+      it("Should be the reverted transaction when calling execute() function", async () => {
+        // Executing the proposal
+        await expect(
+          governorContract.execute(
+            [boxContract.target],
+            [0],
+            [encodedFunction],
+            convertedProposalDescription
+          )
+        ).to.be.reverted;
+      });
+    });
+    describe("After Voting Ending", () => {
+      beforeEach(async () => {
+        // Casting a vote
+        const reasonForVoting = "In-favor proposal #1";
+        await governorContract.castVoteWithReason(
+          proposalId,
+          1,
+          reasonForVoting
+        );
+        // Converting String => Bytes32
+        convertedProposalDescription = hre.ethers.keccak256(
+          hre.ethers.toUtf8Bytes(proposalDescription)
+        );
+      });
+      it("Should be not reverted the transaction when executing the proposal with Queued State", async () => {
+        // Mined more 50 blocks to finish the voting process
+        await moveBlocks(50);
+        // Queueing the proposal
+        let queueTx;
+        await expect(
+          (queueTx = await governorContract.queue(
+            [boxContract.target],
+            [0],
+            [encodedFunction],
+            convertedProposalDescription
+          ))
+        ).to.not.be.reverted;
+        await queueTx.wait(1);
+
+        // Executing the proposal
+        await expect(
+          governorContract.execute(
+            [boxContract.target],
+            [0],
+            [encodedFunction],
+            convertedProposalDescription
+          )
+        ).to.not.be.reverted;
+        // Check: The value is changed or not.
+        expect(await boxContract.retrieve()).to.equal(value);
+      });
+    });
   });
 });
