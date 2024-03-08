@@ -4,7 +4,7 @@ pragma abicoder v2;
 
 import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
-import "./interfaces/ISwapRouterV2.sol";
+import "../interfaces/ISwapRouterV2.sol";
 
 contract SwapContract {
     ISwapRouterV2 public immutable swapRouterV2;
