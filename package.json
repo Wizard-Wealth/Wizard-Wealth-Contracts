@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "repository": "https://github.com/Wizard-Wealth/Wizard-Wealth-Contracts.git",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -14,6 +15,7 @@
     "hardhat": "^2.20.1"
   },
   "dependencies": {
+    "@chainlink/contracts": "^0.8.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.10",
     "@openzeppelin/contracts": "^5.0.1",
     "@openzeppelin/test-helpers": "^0.5.16",
