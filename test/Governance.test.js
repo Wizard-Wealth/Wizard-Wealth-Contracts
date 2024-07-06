@@ -38,11 +38,9 @@ describe("Testing Governance Contract", () => {
     wwTokenContract;
   beforeEach(async () => {
     [deployer, governor, ...signers] = await hre.ethers.getSigners();
+
     // Deploy Governance Token (WizardWealth) Contract
-    const keepTokenPercentage = 5;
-    wwTokenContract = await hre.ethers.deployContract("WizardWealth", [
-      keepTokenPercentage,
-    ]);
+    wwTokenContract = await hre.ethers.deployContract("WizardWealth", []);
     await wwTokenContract.waitForDeployment();
     console.log(`WizardWealth address: ${wwTokenContract.target}`);
     // Delegate Governance Token
@@ -61,6 +59,10 @@ describe("Testing Governance Contract", () => {
     governorContract = await hre.ethers.deployContract("GovernorContract", [
       wwTokenContract.target,
       governanceTimeLockContract.target,
+      1, // 1 day,
+      49, // 1 week,
+      20000n,
+      4n,
     ]);
     await governorContract.waitForDeployment();
     console.log("Governance Contract address: " + governorContract.target);
@@ -94,38 +96,40 @@ describe("Testing Governance Contract", () => {
     await tx.wait(1);
   });
 
-  it("Should create a Proposal Successfully", async () => {
-    const value = 10;
-    const boxInterface = new hre.ethers.Interface(BoxABI.abi);
-    const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
-    const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
-    const createProposalTx = await governorContract.propose(
-      [boxContract.target],
-      [0],
-      [encodedFunction],
-      PROPOSAL_DESCRIPTION
-    );
-    const createProposalTxReceipt = await createProposalTx.wait(1);
+  describe("Creating a Proposal", () => {
+    it("Should create a normal Proposal Successfully", async () => {
+      const value = 10;
+      const boxInterface = new hre.ethers.Interface(BoxABI.abi);
+      const encodedFunction = boxInterface.encodeFunctionData("store", [value]);
+      const PROPOSAL_DESCRIPTION = "Change the value of Box Contract";
+      const createProposalTx = await governorContract.propose(
+        [boxContract.target],
+        [0],
+        [encodedFunction],
+        PROPOSAL_DESCRIPTION
+      );
+      const createProposalTxReceipt = await createProposalTx.wait(1);
 
-    // TestCase: Testing the arguments when passing the propose() function is correct or not.
-    expect(createProposalTxReceipt.logs[0].args.targets[0]).to.equal(
-      boxContract.target
-    );
-    expect(createProposalTxReceipt.logs[0].args.calldatas[0]).to.equal(
-      encodedFunction
-    );
-    expect(createProposalTxReceipt.logs[0].args.description).to.equal(
-      PROPOSAL_DESCRIPTION
-    );
+      // TestCase: Testing the arguments when passing the propose() function is correct or not.
+      expect(createProposalTxReceipt.logs[0].args.targets[0]).to.equal(
+        boxContract.target
+      );
+      expect(createProposalTxReceipt.logs[0].args.calldatas[0]).to.equal(
+        encodedFunction
+      );
+      expect(createProposalTxReceipt.logs[0].args.description).to.equal(
+        PROPOSAL_DESCRIPTION
+      );
 
-    // TestCase: Testing the proposalId of latest created Proposal is valid or not.
-    const proposalId = createProposalTxReceipt.logs[0].args.proposalId;
-    await expect(await governorContract.state(proposalId)).to.not.be.reverted;
+      // TestCase: Testing the proposalId of latest created Proposal is valid or not.
+      const proposalId = createProposalTxReceipt.logs[0].args.proposalId;
+      await expect(await governorContract.state(proposalId)).to.not.be.reverted;
 
-    // TestCase: Testing the status of the proposal is equal "Pending" or not.
-    const proposalStatus =
-      proposalStates[await governorContract.state(proposalId)];
-    expect(proposalStatus).to.equal("Pending");
+      // TestCase: Testing the status of the proposal is equal "Pending" or not.
+      const proposalStatus =
+        proposalStates[await governorContract.state(proposalId)];
+      expect(proposalStatus).to.equal("Pending");
+    });
   });
 
   describe("Casting a vote", () => {
@@ -302,14 +306,50 @@ describe("Testing Governance Contract", () => {
         ).to.not.be.reverted;
         await queueTx.wait(1);
 
+        console.log(await governorContract.state(proposalId));
+
         // Executing the proposal
+        let executeTx;
         await expect(
-          governorContract.execute(
+          (executeTx = await governorContract.execute(
             [boxContract.target],
             [0],
             [encodedFunction],
             convertedProposalDescription
-          )
+          ))
+        ).to.not.be.reverted;
+        await executeTx.wait(1);
+        console.log(await governorContract.state(proposalId));
+        // Check: The value is changed or not.
+        expect(await boxContract.retrieve()).to.equal(value);
+      });
+      it("Executing the proposal with the other account should not be reverted", async () => {
+        // Mined more 50 blocks to finish the voting process
+        await moveBlocks(50);
+        // Queueing the proposal
+        let queueTx;
+        await expect(
+          (queueTx = await governorContract
+            .connect(governor)
+            .queue(
+              [boxContract.target],
+              [0],
+              [encodedFunction],
+              convertedProposalDescription
+            ))
+        ).to.not.be.reverted;
+        await queueTx.wait(1);
+
+        // Executing the proposal
+        await expect(
+          governorContract
+            .connect(governor)
+            .execute(
+              [boxContract.target],
+              [0],
+              [encodedFunction],
+              convertedProposalDescription
+            )
         ).to.not.be.reverted;
         // Check: The value is changed or not.
         expect(await boxContract.retrieve()).to.equal(value);
