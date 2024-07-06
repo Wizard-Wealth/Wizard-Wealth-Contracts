@@ -15,18 +15,8 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
     );
     event TokenMinted(address indexed to, uint256 amount);
     event TokenBurned(address indexed from, uint256 amount);
-    // TOKENS_PER_USER * AMOUNT_USERS_CLAIM = 50 * 10000 => total of claimed =  20000 (token)
-    // AIRDROP PERCENTAGE = 1 %
     uint256 constant TOKENS_PER_USER = 20000;
     uint256 constant MAX_USERS_CLAIMED = 100;
-    // 100 millions (token) =  Max Total Supply
-    /* TGE: Only 10-20 percent = 10-20 millions (token)
-        - Vault(rewarding for ecosystem devs, staking holders): 5-10 percent = 5-10 millions (token)
-            Using proposal for distributing token for ecosystem devs
-            Sharing token for staking holders
-        - Airdrop token: 1 % = 1 million (token)
-        - Adding LP (Uniswap): 4-9 percent = 4-9 million (token)
-    */
     uint256 constant TOTAL_SUPPLY = 100000000 * 10 ** 18;
 
     uint256 public s_claimedUser;
@@ -34,16 +24,12 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
 
     address[] public s_holders;
 
-    constructor(
-        uint256 _keepPercentage
-    )
+    constructor()
         ERC20("WizardWealth", "WiWe")
         ERC20Permit("WizardWealth")
         Ownable(msg.sender)
     {
-        uint256 keepAmount = (TOTAL_SUPPLY * _keepPercentage) / 100;
         _mint(msg.sender, TOTAL_SUPPLY);
-        _transfer(msg.sender, address(this), TOTAL_SUPPLY - keepAmount);
         s_holders.push(msg.sender);
     }
 
@@ -93,5 +79,9 @@ contract WizardWealth is ERC20, ERC20Permit, ERC20Votes, Ownable {
     function burn(address account, uint256 value) public onlyOwner {
         super._burn(account, value);
         emit TokenBurned(account, value);
+    }
+
+    function withdrawAllToken() public onlyOwner {
+        transfer(owner(), balanceOf(address(this)));
     }
 }

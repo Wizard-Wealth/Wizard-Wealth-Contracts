@@ -1,0 +1,10 @@
+{
+    "sepolia": {
+        "WizardWealth": "0x7c413B3E34e15Df24fE5D37B7F041104263aCb89",
+        "GovernanceTimelock": "0xBb159B78F06FcFD408c7C5b60b6CC7b7153162d1",
+        "Governor": "0x932Ea263c20133dF330d5b484928BE854A8F510b",
+        "Staking": "0x7b0E76Fc87DcFAD9adab4A9B88Bd9a44f1cCba96",
+        "Lending": "0x758c3E5ADc6Ba5aE99fa4062fEf3eb8033383212",
+        "Swap": "0x8455b88f8903a64c0470aef5940f3186ea945d54"
+    }
+}

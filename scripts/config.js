@@ -4,7 +4,7 @@ let config;
 
 const initConfig = async () => {
   console.log(`Init config`);
-  const readConfig = (await fs.readFile(`./config.json`)).toString();
+  const readConfig = (await fs.readFile(`./scripts/config.json`)).toString();
   config = readConfig == "" ? {} : JSON.parse(readConfig).toString();
   return config;
 };
@@ -12,7 +12,8 @@ const initConfig = async () => {
 const getConfig = () => config;
 
 const setConfig = async (path, value) => {
-  console.log("Before config", config);
+  console.log("Before config");
+  console.log(config);
   const splitPath = path.split(".").reverse();
 
   var ref = config;
@@ -34,7 +35,10 @@ const setConfig = async (path, value) => {
 
 const updateConfig = async () => {
   console.log("write: ", JSON.stringify(config));
-  return await fs.writeFile("./config.json", JSON.stringify(config, null, 2));
+  return await fs.writeFile(
+    "./scripts/config.json",
+    JSON.stringify(config, null, 2)
+  );
 };
 module.exports = Config = {
   initConfig,

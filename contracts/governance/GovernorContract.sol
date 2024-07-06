@@ -4,12 +4,10 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/governance/Governor.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorStorage.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
-import "@openzeppelin/contracts/governance/TimelockController.sol";
-import "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import "@openzeppelin/contracts/interfaces/IERC165.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 
 /**
@@ -31,27 +29,31 @@ import "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
 contract GovernorContract is
     Governor,
     GovernorCountingSimple,
+    GovernorStorage,
     GovernorSettings,
     GovernorVotes,
     GovernorVotesQuorumFraction,
     GovernorTimelockControl
 {
-    uint256 public s_proposalCounting;
-
     constructor(
         IVotes _token,
-        TimelockController _timelock
+        TimelockController _timelock,
+        uint48 _initialVotingDelay,
+        uint32 _initialVotingPeriod,
+        uint256 _intialProposalThreshold,
+        uint256 _quorumNumeratorValue
     )
         Governor("WizardGovernance")
-        GovernorSettings(1 /* 1 block */, 50 /* 50400  1 week */, 0)
+        GovernorSettings(
+            _initialVotingDelay,
+            _initialVotingPeriod,
+            _intialProposalThreshold
+        )
         GovernorVotes(_token)
-        GovernorVotesQuorumFraction(4)
+        GovernorVotesQuorumFraction(_quorumNumeratorValue)
         GovernorTimelockControl(_timelock)
     {}
 
-    /// @notice How long after a proposal is created should voting power be fixed. A large voting delay gives users time to unstake tokens if necessary.
-    /// @dev Dev can set this votingDelay time
-    /// @return return how long after a proposal is created should voting power be fixed
     function votingDelay()
         public
         view
@@ -61,9 +63,6 @@ contract GovernorContract is
         return super.votingDelay();
     }
 
-    /// @notice How long does a proposal remain open to votes.
-    /// @dev Dev can set this votingDelay time
-    /// @return return How long does a proposal remain open to votes.
     function votingPeriod()
         public
         view
@@ -161,19 +160,14 @@ contract GovernorContract is
         return super._executor();
     }
 
-    function propose(
+    function _propose(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
-        string memory description
-    ) public override(Governor) returns (uint256) {
-        unchecked {
-            ++s_proposalCounting;
-        }
-        return super.propose(targets, values, calldatas, description);
-    }
-
-    function getProposalCounting() public view returns (uint256) {
-        return s_proposalCounting;
+        string memory description,
+        address proposer
+    ) internal override(Governor, GovernorStorage) returns (uint256) {
+        return
+            super._propose(targets, values, calldatas, description, proposer);
     }
 }

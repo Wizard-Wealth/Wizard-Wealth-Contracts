@@ -12,18 +12,15 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with the account: ", deployer.address);
 
-  console.log("Deploying Swap Contract...");
-  const RouterV2 = "0x86dcd3293c53cf8efd7303b57beb2a3f671dde98";
-  const WETH = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
-
-  const swapContract = await hre.ethers.deployContract("SwapContract", [
-    RouterV2,
-    WETH,
+  console.log("Deploying Token Contract...");
+  // Deploy contract
+  const keepTokenPercentage = 70;
+  // Wizard Wealth Token Contract
+  console.log("Deploying WizardWealth Contract ...");
+  const token = await hre.ethers.deployContract("WizardWealth", [
+    keepTokenPercentage,
   ]);
-  await swapContract.waitForDeployment();
-  console.log("Swap Contract address: " + swapContract.target);
-  await Config.setConfig(network + ".Swap", swapContract.target);
-  await Config.updateConfig();
+  await token.waitForDeployment();
 }
 
 // We recommend this pattern to be able to use async/await everywhere

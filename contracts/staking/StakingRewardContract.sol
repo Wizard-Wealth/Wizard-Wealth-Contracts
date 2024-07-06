@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 // Inheritance
 import "../interfaces/IStakingRewards.sol";
 import "../Pausable.sol";
+import "hardhat/console.sol";
 
 contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
     using Math for uint256;
@@ -47,7 +48,7 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
         // calculate the reward token user can claim
         if (_account != address(0)) {
             rewards[_account] = earned(_account);
-            userRewardPerTokenPaid[msg.sender] = rewardPerTokenStored;
+            userRewardPerTokenPaid[_account] = rewardPerTokenStored;
         }
         _;
     }
@@ -78,9 +79,10 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
         if (_totalSupply == 0) return rewardPerTokenStored;
         return
             rewardPerTokenStored +
-            ((rewardRate *
+            (rewardRate *
                 (lastTimeRewardApplicable() - lastUpdateTime) *
-                1e18) / _totalSupply);
+                1e18) /
+            _totalSupply;
     }
 
     // Getter Functions
@@ -127,7 +129,10 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
     function getReward() external updateReward(msg.sender) {
         uint256 reward = rewards[msg.sender];
         rewards[msg.sender] = 0;
-        rewardsToken.transfer(msg.sender, reward);
+        require(
+            rewardsToken.transfer(msg.sender, reward),
+            "Getting Reward Token failed"
+        );
         emit RewardClaimed(msg.sender, reward);
     }
 
@@ -135,7 +140,10 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
         require(_amount > 0, "Amount must be greater than zero");
         _totalSupply += _amount;
         _balances[msg.sender] += _amount;
-        stakingToken.transferFrom(msg.sender, address(this), _amount);
+        require(
+            stakingToken.transferFrom(msg.sender, address(this), _amount),
+            "Staking failed"
+        );
         emit Staked(msg.sender, _amount);
     }
 
@@ -143,7 +151,7 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
         require(_amount > 0, "Amount must be greater than zero");
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
-        stakingToken.transfer(msg.sender, _amount);
+        require(stakingToken.transfer(msg.sender, _amount), "Withdrawn failed");
         emit Withdraw(msg.sender, _amount);
     }
 
@@ -164,9 +172,9 @@ contract StakingReward is Pausable, ReentrancyGuard, IStakingRewards {
                 rewardsToken.balanceOf(address(this)),
             "Reward Amount > Balance"
         );
-
-        periodFinish = block.timestamp + rewardsDuration;
-        lastUpdateTime = block.timestamp;
+        uint256 currentTime = block.timestamp;
+        periodFinish = currentTime + rewardsDuration;
+        lastUpdateTime = currentTime;
     }
 
     // Event
